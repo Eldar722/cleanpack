@@ -63,10 +63,10 @@ class StorageWeb implements StorageService {
   @override
   Future<String> exportCsv() async {
     final logs = await getLogs(limit: 10000);
-    final buf = StringBuffer('id,timestamp,result,defect_type,confidence,ssim\n');
+    final buf = StringBuffer('id,position_id,timestamp,result,defect_type,confidence,ssim\n');
     for (final l in logs) {
       buf.writeln(
-          '${l.id},${l.timestamp.toIso8601String()},${l.result},${l.defectType},${l.confidence.toStringAsFixed(3)},${l.ssimScore?.toStringAsFixed(3) ?? ''}');
+          '${l.id},${l.positionId},${l.timestamp.toIso8601String()},${l.result},${l.defectType},${l.confidence.toStringAsFixed(3)},${l.ssimScore?.toStringAsFixed(3) ?? ''}');
     }
     return buf.toString();
   }

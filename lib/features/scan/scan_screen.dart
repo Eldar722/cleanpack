@@ -1,11 +1,24 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../core/constants.dart';
 import '../../core/platform_utils.dart';
 import 'ar_painter.dart';
 import 'scan_provider.dart';
+
+// Типы дефектов по ТЗ (полиэфирное волокно)
+final _kDefects = [
+  _DefectType('Дырка', '○', const Color(0xFFFF6B35)),
+  _DefectType('Грязь на волокне', '✦', const Color(0xFFFFB800)),
+  _DefectType('Разрыв упаковки', '╱', const Color(0xFFFF3355)),
+];
+
+class _DefectType {
+  final String label;
+  final String icon;
+  final Color color;
+  const _DefectType(this.label, this.icon, this.color);
+}
 
 class ScanScreen extends ConsumerStatefulWidget {
   const ScanScreen({super.key});
@@ -17,6 +30,9 @@ class ScanScreen extends ConsumerStatefulWidget {
 class _ScanScreenState extends ConsumerState<ScanScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse;
+  late final TextEditingController _posCtrl;
+  // Текущий выбранный маркер (null = чисто/ГОДНО)
+  _DefectType? _selectedDefect;
 
   @override
   void initState() {
@@ -25,6 +41,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
+    _posCtrl = TextEditingController(text: 'ПАРТИЯ-01');
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(scanControllerProvider.notifier).initialize();
     });
@@ -32,8 +50,18 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
 
   @override
   void dispose() {
+    _posCtrl.dispose();
     _pulse.dispose();
     super.dispose();
+  }
+
+  void _selectDefect(_DefectType? d) {
+    setState(() => _selectedDefect = d);
+    if (d != null) {
+      ref.read(scanControllerProvider.notifier).simulateDefectMarker(d.label);
+    } else {
+      ref.read(scanControllerProvider.notifier).simulateOk();
+    }
   }
 
   @override
@@ -49,20 +77,19 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: Center(
-              child: _pill(
-                '${state.fps} FPS',
-                state.ready ? AppPalette.okGreen : AppPalette.slate,
-              ),
+              child: _pill('${state.fps} FPS',
+                  state.ready ? AppPalette.okGreen : AppPalette.slate),
             ),
           ),
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         child: Column(
           children: [
+            // ── Камера с AR оверлеем ──────────────────────────────
             Expanded(
-              flex: 7,
+              flex: 6,
               child: _CameraCard(
                 isReady: state.ready && cam.isInitialized,
                 controller: cam.controller,
@@ -71,51 +98,105 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
                 cameraError: state.cameraError,
               ),
             ),
-            const SizedBox(height: 16),
-            Expanded(
-              flex: 2,
-              child: _StatusBanner(state: state),
+            const SizedBox(height: 10),
+
+            // ── Шаг 1: Номер позиции ─────────────────────────────
+            _StepLabel(step: '1', text: 'Позиция / партия'),
+            const SizedBox(height: 6),
+            Container(
+              decoration: BoxDecoration(
+                color: AppPalette.surface2,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppPalette.borderSoft),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: TextField(
+                controller: _posCtrl,
+                style: const TextStyle(
+                    color: AppPalette.ink, fontWeight: FontWeight.w600),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  icon: Icon(Icons.inventory_2_outlined,
+                      color: AppPalette.slate, size: 20),
+                  hintText: 'Введите номер упаковки',
+                  hintStyle: TextStyle(color: AppPalette.slate),
+                ),
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
+
+            // ── Шаг 2: AR маркер дефекта ──────────────────────────
+            _StepLabel(step: '2', text: 'AR маркер — что видит камера'),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                // Чисто (ГОДНО)
+                Expanded(
+                  child: _MarkerChip(
+                    label: 'Чисто',
+                    icon: '✓',
+                    color: AppPalette.okGreen,
+                    selected: _selectedDefect == null,
+                    onTap: () => _selectDefect(null),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // Дефекты по ТЗ
+                ...List.generate(_kDefects.length, (i) {
+                  final d = _kDefects[i];
+                  return Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(left: i == 0 ? 0 : 6),
+                      child: _MarkerChip(
+                        label: d.label.split(' ').first,
+                        icon: d.icon,
+                        color: d.color,
+                        selected: _selectedDefect == d,
+                        onTap: () => _selectDefect(d),
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // ── Шаг 3: Вердикт оператора ─────────────────────────
+            _StepLabel(step: '3', text: 'Вердикт оператора'),
+            const SizedBox(height: 6),
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.photo_camera_outlined),
-                    label: const Text('Эталон'),
-                    onPressed: () => context.go('/ref'),
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppPalette.defectRed,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.close_rounded, size: 22),
+                    label: const Text('БРАК',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 16)),
+                    onPressed: () => _saveInspection(true),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton.icon(
-                    icon: Icon(state.paused
-                        ? Icons.play_arrow_rounded
-                        : Icons.pause_rounded),
-                    label: Text(state.paused ? 'Продолжить' : 'Пауза'),
-                    onPressed: () =>
-                        ref.read(scanControllerProvider.notifier).pauseResume(),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // Демо-кнопки для хакатона
-            Row(
-              children: [
-                Expanded(
-                  child: _demoBtn(
-                    '🔴 БРАК (демо)',
-                    AppPalette.defectRed,
-                    () => ref.read(scanControllerProvider.notifier).addDemoLogs(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _demoBtn(
-                    '🟢 ГОДНО (демо)',
-                    AppPalette.okGreen,
-                    () => ref.read(scanControllerProvider.notifier).simulateOk(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppPalette.okGreen,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.check_rounded, size: 22),
+                    label: const Text('ГОДНО',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 16)),
+                    onPressed: () => _saveInspection(false),
                   ),
                 ),
               ],
@@ -124,6 +205,34 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
         ),
       ),
     );
+  }
+
+  Future<void> _saveInspection(bool isDefect) async {
+    final posId = _posCtrl.text.trim();
+    if (posId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Укажите номер позиции')));
+      return;
+    }
+    await ref
+        .read(scanControllerProvider.notifier)
+        .saveManualInspection(posId, isDefect);
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isDefect
+            ? 'Брак зафиксирован: ${_selectedDefect?.label ?? "–"}'
+            : 'ГОДНО — позиция $posId сохранена'),
+        backgroundColor:
+            isDefect ? AppPalette.defectRed : AppPalette.okGreen,
+        duration: const Duration(seconds: 1),
+      ),
+    );
+
+    // Сброс к следующей позиции
+    setState(() => _selectedDefect = null);
+    ref.read(scanControllerProvider.notifier).simulateOk();
   }
 
   Widget _pill(String text, Color color) {
@@ -139,22 +248,88 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
               color: color, fontWeight: FontWeight.w600, fontSize: 12)),
     );
   }
+}
 
-  Widget _demoBtn(String label, Color color, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.35)),
+class _StepLabel extends StatelessWidget {
+  final String step;
+  final String text;
+  const _StepLabel({required this.step, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            color: AppPalette.accent.withOpacity(0.2),
+            shape: BoxShape.circle,
+            border: Border.all(color: AppPalette.accent.withOpacity(0.5)),
+          ),
+          child: Center(
+            child: Text(step,
+                style: const TextStyle(
+                    color: AppPalette.accent,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700)),
+          ),
         ),
-        child: Center(
-          child: Text(label,
-              style: TextStyle(
-                  color: color, fontSize: 13, fontWeight: FontWeight.w600)),
+        const SizedBox(width: 8),
+        Text(text,
+            style: const TextStyle(
+                color: AppPalette.slate,
+                fontSize: 12,
+                fontWeight: FontWeight.w500)),
+      ],
+    );
+  }
+}
+
+class _MarkerChip extends StatelessWidget {
+  final String label;
+  final String icon;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+  const _MarkerChip({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? color.withOpacity(0.2) : AppPalette.surface2,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? color : AppPalette.borderSoft,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(icon,
+                style: TextStyle(
+                    color: selected ? color : AppPalette.slate, fontSize: 16)),
+            const SizedBox(height: 2),
+            Text(label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: selected ? color : AppPalette.slate,
+                    fontSize: 10,
+                    fontWeight:
+                        selected ? FontWeight.w700 : FontWeight.w400)),
+          ],
         ),
       ),
     );

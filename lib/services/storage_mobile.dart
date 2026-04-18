@@ -15,11 +15,12 @@ class StorageMobile implements StorageService {
     final path = p.join(dir.path, 'cleanpack.db');
     _db = await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, v) async {
         await db.execute('''
           CREATE TABLE logs (
             id TEXT PRIMARY KEY,
+            position_id TEXT NOT NULL,
             ts TEXT NOT NULL,
             result TEXT NOT NULL,
             defect_type TEXT,
@@ -38,6 +39,22 @@ class StorageMobile implements StorageService {
           )
         ''');
       },
+      onUpgrade: (db, oldV, newV) async {
+        if (oldV < 2) {
+          await db.execute('DROP TABLE IF EXISTS logs');
+          await db.execute('''
+            CREATE TABLE logs (
+              id TEXT PRIMARY KEY,
+              position_id TEXT NOT NULL,
+              ts TEXT NOT NULL,
+              result TEXT NOT NULL,
+              defect_type TEXT,
+              confidence REAL,
+              ssim REAL
+            )
+          ''');
+        }
+      },
     );
   }
 
@@ -47,6 +64,7 @@ class StorageMobile implements StorageService {
   Future<void> saveLog(InspectionLog log) async {
     await _d.insert('logs', {
       'id': log.id,
+      'position_id': log.positionId,
       'ts': log.timestamp.toIso8601String(),
       'result': log.result,
       'defect_type': log.defectType,
@@ -61,6 +79,7 @@ class StorageMobile implements StorageService {
     return rows
         .map((r) => InspectionLog(
               id: r['id'] as String,
+              positionId: r['position_id'] as String? ?? 'Не указано',
               timestamp: DateTime.parse(r['ts'] as String),
               result: r['result'] as String,
               defectType: (r['defect_type'] as String?) ?? 'none',
@@ -95,10 +114,10 @@ class StorageMobile implements StorageService {
   @override
   Future<String> exportCsv() async {
     final logs = await getLogs(limit: 10000);
-    final buf = StringBuffer('id,timestamp,result,defect_type,confidence,ssim\n');
+    final buf = StringBuffer('id,position_id,timestamp,result,defect_type,confidence,ssim\n');
     for (final l in logs) {
       buf.writeln(
-          '${l.id},${l.timestamp.toIso8601String()},${l.result},${l.defectType},${l.confidence.toStringAsFixed(3)},${l.ssimScore?.toStringAsFixed(3) ?? ''}');
+          '${l.id},${l.positionId},${l.timestamp.toIso8601String()},${l.result},${l.defectType},${l.confidence.toStringAsFixed(3)},${l.ssimScore?.toStringAsFixed(3) ?? ''}');
     }
     return buf.toString();
   }

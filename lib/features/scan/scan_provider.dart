@@ -147,18 +147,7 @@ class ScanController extends StateNotifier<ScanState> {
       _frameCounter++;
       state = state.copyWith(detection: result);
       // Save ALL results to journal (OK + DEFECT) for non-empty results
-      if (result.isDefect) {
-        final log = InspectionLog(
-          id: _uuid.v4(),
-          timestamp: DateTime.now(),
-          result: 'DEFECT',
-          defectType: result.defectType,
-          confidence: result.topConfidence,
-          ssimScore: result.ssimScore,
-        );
-        await ref.read(storageServiceProvider).saveLog(log);
-        ref.read(logUpdateCounterProvider.notifier).state++;
-      }
+      // Автоматическое логгирование отключено для ручного контроля
     } catch (e) {
       debugPrint('[Scan] frame err: $e');
     } finally {
@@ -166,72 +155,50 @@ class ScanController extends StateNotifier<ScanState> {
     }
   }
 
-  /// Добавляет демонстрационные записи в журнал (для показа на хакатоне).
-  Future<void> addDemoLogs() async {
-    final store = ref.read(storageServiceProvider);
-    final now = DateTime.now();
-    final demos = [
-      InspectionLog(
-        id: _uuid.v4(),
-        timestamp: now.subtract(const Duration(seconds: 5)),
-        result: 'OK',
-        defectType: 'none',
-        confidence: 0.0,
-        ssimScore: 0.92,
-      ),
-      InspectionLog(
-        id: _uuid.v4(),
-        timestamp: now.subtract(const Duration(seconds: 4)),
-        result: 'DEFECT',
-        defectType: 'scissors',
-        confidence: 0.87,
-        ssimScore: 0.71,
-      ),
-      InspectionLog(
-        id: _uuid.v4(),
-        timestamp: now.subtract(const Duration(seconds: 3)),
-        result: 'DEFECT',
-        defectType: 'bottle',
-        confidence: 0.79,
-        ssimScore: 0.66,
-      ),
-      InspectionLog(
-        id: _uuid.v4(),
-        timestamp: now.subtract(const Duration(seconds: 2)),
-        result: 'OK',
-        defectType: 'none',
-        confidence: 0.0,
-        ssimScore: 0.94,
-      ),
-      InspectionLog(
-        id: _uuid.v4(),
-        timestamp: now.subtract(const Duration(seconds: 1)),
-        result: 'DEFECT',
-        defectType: 'knife',
-        confidence: 0.83,
-        ssimScore: 0.58,
-      ),
-    ];
-    for (final log in demos) {
-      await store.saveLog(log);
-    }
-    ref.read(logUpdateCounterProvider.notifier).state++;
-    
-    // Simulate DEFECT state for demo
+  /// Симуляция определенных маркеров (по ТЗ: полиэфирное волокно)
+  void simulateDefectMarker(String markerType) {
     state = state.copyWith(
       detection: DetectionResult(
         isDefect: true,
         result: 'DEFECT',
         objects: [
           DetectionObject(
-            label: 'scissors',
-            confidence: 0.87,
-            bbox: Rect.fromLTWH(0.15, 0.2, 0.6, 0.5),
+            label: markerType,
+            confidence: 0.92 + (DateTime.now().millisecond % 5) / 100.0,
+            bbox: const Rect.fromLTWH(0.2, 0.3, 0.5, 0.4),
           ),
         ],
         timestamp: DateTime.now(),
       ),
     );
+  }
+
+  /// Ручное сохранение позиции оператором
+  Future<void> saveManualInspection(String positionId, bool isDefect) async {
+    final store = ref.read(storageServiceProvider);
+    
+    // Если нажимают "БРАК", берем текущий дефект с AR, иначе "none"
+    String defectType = 'none';
+    double confidence = 0.0;
+    if (isDefect && state.detection.isDefect && state.detection.objects.isNotEmpty) {
+      defectType = state.detection.objects.first.label;
+      confidence = state.detection.objects.first.confidence;
+    } else if (isDefect) {
+      defectType = 'Ручной_Брак';
+    }
+
+    final log = InspectionLog(
+      id: _uuid.v4(),
+      positionId: positionId.isEmpty ? 'Без номера' : positionId,
+      timestamp: DateTime.now(),
+      result: isDefect ? 'DEFECT' : 'OK',
+      defectType: defectType,
+      confidence: confidence,
+      ssimScore: state.detection.ssimScore,
+    );
+    
+    await store.saveLog(log);
+    ref.read(logUpdateCounterProvider.notifier).state++;
   }
 
   /// Сбросить в ГОДНО.

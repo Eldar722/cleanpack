@@ -192,6 +192,10 @@ class _LogRow extends StatelessWidget {
                   isDefect ? 'БРАК — ${log.defectType}' : 'ГОДНО',
                   style: TextStyle(color: color, fontWeight: FontWeight.w600),
                 ),
+                Text(
+                  'Поз: ${log.positionId}',
+                  style: const TextStyle(color: AppPalette.ink, fontSize: 13, fontWeight: FontWeight.w500),
+                ),
                 const SizedBox(height: 2),
                 Text(
                   DateFormat('dd.MM.yyyy HH:mm:ss').format(log.timestamp),

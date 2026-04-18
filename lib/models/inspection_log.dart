@@ -1,5 +1,6 @@
 class InspectionLog {
   final String id;
+  final String positionId;
   final DateTime timestamp;
   final String result; // OK | DEFECT
   final String defectType;
@@ -8,6 +9,7 @@ class InspectionLog {
 
   const InspectionLog({
     required this.id,
+    required this.positionId,
     required this.timestamp,
     required this.result,
     required this.defectType,
@@ -17,6 +19,7 @@ class InspectionLog {
 
   Map<String, dynamic> toJson() => {
         'id': id,
+        'position_id': positionId,
         'timestamp': timestamp.toIso8601String(),
         'result': result,
         'defect_type': defectType,
@@ -26,6 +29,7 @@ class InspectionLog {
 
   factory InspectionLog.fromJson(Map<String, dynamic> j) => InspectionLog(
         id: j['id'] as String,
+        positionId: j['position_id'] as String? ?? 'Не указано',
         timestamp: DateTime.parse(j['timestamp'] as String),
         result: j['result'] as String,
         defectType: j['defect_type'] as String? ?? 'none',
