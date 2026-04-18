@@ -1,5 +1,5 @@
 {
-  "buildCommand": "flutter build web --release --no-wasm-dry-run",
+  "buildCommand": "git clone https://github.com/flutter/flutter.git --depth 1 -b stable /tmp/flutter && /tmp/flutter/bin/flutter pub get && /tmp/flutter/bin/flutter build web --release --no-wasm-dry-run",
   "outputDirectory": "build/web",
-  "installCommand": "flutter pub get"
+  "installCommand": "echo 'Flutter will be installed in build step'"
 }
