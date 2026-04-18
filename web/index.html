@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="CleanPack AR — AR Quality Control for Polyester Fiber Packaging">
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="CleanPack AR">
+  <meta name="theme-color" content="#00FF88">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <title>CleanPack AR</title>
+  <link rel="manifest" href="manifest.json">
+
+  <style>
+    html, body { margin: 0; padding: 0; background: #050505; font-family: 'JetBrains Mono', monospace; }
+    #cp-video { display: none; }
+  </style>
+
+  <!-- TensorFlow.js for Web detection -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+  <script>
+    let cpModel = null;
+    let cpVideo = null;
+    const cpCanvas = document.createElement('canvas');
+    cpCanvas.width = 640; cpCanvas.height = 640;
+
+    window.loadYoloModel = async function(modelUrl) {
+      try {
+        cpModel = await tf.loadGraphModel(modelUrl);
+        const dummy = tf.zeros([1, 640, 640, 3]);
+        await cpModel.executeAsync(dummy);
+        dummy.dispose();
+        console.log('[CleanPack] YOLO web model ready');
+      } catch (e) {
+        console.warn('[CleanPack] web model load failed, running in stub mode', e);
+        cpModel = null;
+      }
+    };
+
+    window.detectOnVideo = async function() {
+      if (!cpModel) return '[]';
+      if (!cpVideo) {
+        cpVideo = document.querySelector('video');
+        if (!cpVideo) return '[]';
+      }
+      if (cpVideo.readyState < 2) return '[]';
+      const ctx = cpCanvas.getContext('2d');
+      ctx.drawImage(cpVideo, 0, 0, cpCanvas.width, cpCanvas.height);
+
+      const input = tf.tidy(() =>
+        tf.browser.fromPixels(cpCanvas).div(255.0).expandDims(0));
+
+      const out = cpModel.execute(input);
+      const data = await out.data();
+      tf.dispose([input, out]);
+
+      return JSON.stringify(parseYolo(data, cpCanvas.width, cpCanvas.height));
+    };
+
+    function parseYolo(data, cw, ch) {
+      const numBoxes = 8400, numClasses = 80, threshold = 0.4;
+      const objects = [];
+      for (let i = 0; i < numBoxes; i++) {
+        let maxScore = 0, maxClass = 0;
+        for (let c = 0; c < numClasses; c++) {
+          const s = data[(4 + c) * numBoxes + i];
+          if (s > maxScore) { maxScore = s; maxClass = c; }
+        }
+        if (maxScore < threshold) continue;
+        const cx = data[0 * numBoxes + i];
+        const cy = data[1 * numBoxes + i];
+        const w  = data[2 * numBoxes + i];
+        const h  = data[3 * numBoxes + i];
+        objects.push({
+          classIndex: maxClass,
+          confidence: maxScore,
+          x1: (cx - w/2) / 640 * cw,
+          y1: (cy - h/2) / 640 * ch,
+          x2: (cx + w/2) / 640 * cw,
+          y2: (cy + h/2) / 640 * ch,
+          canvasWidth: cw,
+          canvasHeight: ch,
+        });
+      }
+      return objects;
+    }
+  </script>
+</head>
+<body>
+  <video id="cp-video" autoplay playsinline muted></video>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

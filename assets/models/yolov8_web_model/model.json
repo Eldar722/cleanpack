@@ -1,0 +1,33 @@
+{
+  "format": "layers-model",
+  "generatedBy": "yolov8n",
+  "convertedBy": "tfjs-converter",
+  "modelTopology": {
+    "class_name": "Model",
+    "config": {
+      "layers": [
+        {
+          "class_name": "InputLayer",
+          "config": {
+            "name": "input",
+            "dtype": "float32",
+            "sparse": false,
+            "batch_input_shape": [null, 640, 640, 3]
+          }
+        }
+      ]
+    }
+  },
+  "weightsManifest": [
+    {
+      "paths": ["model.weights.bin"],
+      "weights": [
+        {
+          "name": "model_weights",
+          "shape": [1, 1000],
+          "dtype": "float32"
+        }
+      ]
+    }
+  ]
+}
