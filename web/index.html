@@ -27,7 +27,6 @@
     #cp-video { display: none; }
   </style>
 
-  <!-- TensorFlow.js for Web detection -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
   <script>
     let cpModel = null;
@@ -35,6 +34,122 @@
     const cpCanvas = document.createElement('canvas');
     cpCanvas.width = 640; cpCanvas.height = 640;
 
+    // ────────────────────────────────────────────────────────
+    // SELF-REFERENCING LOCAL CONTRAST DETECTOR
+    // No reference image needed. Works by analyzing the frame
+    // itself: a clean surface has uniform tiles (low variance).
+    // Dust/particles create high-variance tiles on an otherwise
+    // uniform background.
+    // ────────────────────────────────────────────────────────
+    const DET_W = 160, DET_H = 120, TILE = 8;
+
+    function detectContamination(videoEl) {
+      const c = document.createElement('canvas');
+      c.width = DET_W; c.height = DET_H;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(videoEl, 0, 0, DET_W, DET_H);
+      const data = ctx.getImageData(0, 0, DET_W, DET_H).data;
+
+      const tilesX = Math.floor(DET_W / TILE);
+      const tilesY = Math.floor(DET_H / TILE);
+      const tileStats = [];
+
+      // Pass 1: compute per-tile mean and variance
+      for (let ty = 0; ty < tilesY; ty++) {
+        for (let tx = 0; tx < tilesX; tx++) {
+          let sum = 0, count = 0;
+          const vals = [];
+          for (let y = ty*TILE; y < (ty+1)*TILE; y++) {
+            for (let x = tx*TILE; x < (tx+1)*TILE; x++) {
+              const i = (y * DET_W + x) * 4;
+              const luma = 0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2];
+              vals.push(luma);
+              sum += luma;
+              count++;
+            }
+          }
+          const mean = sum / count;
+          let varSum = 0;
+          for (const v of vals) varSum += (v - mean) * (v - mean);
+          const variance = varSum / count;
+          tileStats.push({ tx, ty, mean, variance });
+        }
+      }
+
+      // Pass 2: compute global median variance (= "normal" surface texture)
+      const sortedVar = tileStats.map(t => t.variance).sort((a,b) => a - b);
+      const medianVar = sortedVar[Math.floor(sortedVar.length / 2)];
+      // Also compute global mean brightness
+      const globalMean = tileStats.reduce((s, t) => s + t.mean, 0) / tileStats.length;
+
+      // Pass 3: flag tiles with abnormal variance
+      // A tile with variance >> median indicates particles
+      // Threshold adapts: on uniform surfaces (low medianVar), even small
+      // deviations matter. On textured surfaces, we need bigger jumps.
+      // Lowered multiplier 3.0→2.0 and floor 40→20 for higher recall
+      const varThreshold = Math.max(medianVar * 2.0, 20);
+
+      const anomalies = [];
+      for (const t of tileStats) {
+        if (t.variance > varThreshold) {
+          const meanDiff = Math.abs(t.mean - globalMean);
+          if (meanDiff > 5 || t.variance > varThreshold * 1.5) {
+            anomalies.push(t);
+          }
+        }
+      }
+
+      if (anomalies.length === 0) return '[]';
+
+      // Skip if >45% of tiles anomalous — whole scene changed, not a local defect
+      if (anomalies.length > tileStats.length * 0.45) return '[]';
+
+      // Union-find cluster: group tiles within 2-tile distance into separate bboxes
+      const n = anomalies.length;
+      const parent = Array.from({length: n}, (_, i) => i);
+      function find(i) { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; }
+      function union(a, b) { parent[find(a)] = find(b); }
+      for (let i = 0; i < n; i++)
+        for (let j = i + 1; j < n; j++)
+          if (Math.abs(anomalies[i].tx - anomalies[j].tx) <= 2 &&
+              Math.abs(anomalies[i].ty - anomalies[j].ty) <= 2)
+            union(i, j);
+
+      const groups = {};
+      for (let i = 0; i < n; i++) {
+        const r = find(i);
+        if (!groups[r]) groups[r] = [];
+        groups[r].push(anomalies[i]);
+      }
+
+      // Build one detection per cluster, return top 4 by size
+      const results = Object.values(groups)
+        .sort((a, b) => b.length - a.length)
+        .slice(0, 4)
+        .map(group => {
+          let minX = 9999, minY = 9999, maxX = -1, maxY = -1;
+          for (const a of group) {
+            const px = a.tx * TILE, py = a.ty * TILE;
+            if (px < minX) minX = px;
+            if (py < minY) minY = py;
+            if (px + TILE > maxX) maxX = px + TILE;
+            if (py + TILE > maxY) maxY = py + TILE;
+          }
+          return {
+            classIndex: 82,
+            confidence: Math.min(0.55 + group.length * 0.05, 0.98),
+            x1: minX / DET_W * 640, y1: minY / DET_H * 640,
+            x2: maxX / DET_W * 640, y2: maxY / DET_H * 640,
+            canvasWidth: 640, canvasHeight: 640
+          };
+        });
+
+      return JSON.stringify(results);
+    }
+
+    // ────────────────────────────────────────────────────────
+    // YOLO MODEL (optional, not required for dust detection)
+    // ────────────────────────────────────────────────────────
     window.loadYoloModel = async function(modelUrl) {
       try {
         cpModel = await tf.loadGraphModel(modelUrl);
@@ -43,33 +158,44 @@
         dummy.dispose();
         console.log('[CleanPack] YOLO web model ready');
       } catch (e) {
-        console.warn('[CleanPack] web model load failed, running in stub mode', e);
+        console.warn('[CleanPack] YOLO not loaded, using local contrast detector', e);
         cpModel = null;
       }
     };
 
+    // ────────────────────────────────────────────────────────
+    // MAIN DETECTION ENTRY POINT (called from Dart every 200ms)
+    // ────────────────────────────────────────────────────────
     window.detectOnVideo = async function() {
-      if (!cpModel) return '[]';
       if (!cpVideo) {
         cpVideo = document.querySelector('video');
         if (!cpVideo) return '[]';
       }
       if (cpVideo.readyState < 2) return '[]';
-      const ctx = cpCanvas.getContext('2d');
-      ctx.drawImage(cpVideo, 0, 0, cpCanvas.width, cpCanvas.height);
 
-      const input = tf.tidy(() =>
-        tf.browser.fromPixels(cpCanvas).div(255.0).expandDims(0));
+      // PRIMARY: Self-referencing local contrast (catches dust)
+      const contaminationResult = detectContamination(cpVideo);
+      if (contaminationResult !== '[]') {
+        return contaminationResult;
+      }
 
-      const out = cpModel.execute(input);
-      const data = await out.data();
-      tf.dispose([input, out]);
+      // SECONDARY: YOLO (if loaded, catches large objects)
+      if (cpModel) {
+        const ctx = cpCanvas.getContext('2d');
+        ctx.drawImage(cpVideo, 0, 0, cpCanvas.width, cpCanvas.height);
+        const input = tf.tidy(() =>
+          tf.browser.fromPixels(cpCanvas).div(255.0).expandDims(0));
+        const out = cpModel.execute(input);
+        const data = await out.data();
+        tf.dispose([input, out]);
+        return JSON.stringify(parseYolo(data, cpCanvas.width, cpCanvas.height));
+      }
 
-      return JSON.stringify(parseYolo(data, cpCanvas.width, cpCanvas.height));
+      return '[]';
     };
 
     function parseYolo(data, cw, ch) {
-      const numBoxes = 8400, numClasses = 80, threshold = 0.4;
+      const numBoxes = 8400, numClasses = 80, threshold = 0.25;
       const objects = [];
       for (let i = 0; i < numBoxes; i++) {
         let maxScore = 0, maxClass = 0;

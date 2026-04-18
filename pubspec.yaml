@@ -43,3 +43,4 @@ flutter:
     - assets/models/yolov8_web_model/model.weights.bin
     - assets/models/yolov8n.tflite
     - assets/labels/coco_labels.txt
+    - assets/references/dust_ref.jpeg

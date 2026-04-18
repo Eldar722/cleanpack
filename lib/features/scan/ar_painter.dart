@@ -102,13 +102,10 @@ class ArPainter extends CustomPainter {
         ),
       );
 
-      // Метка с типом и уверенностью
-      _drawLabel(
-        canvas,
-        '${o.label}  ${(o.confidence * 100).toInt()}%',
-        Offset(rect.left, rect.top - 26),
-        defColor,
-      );
+      // Метка с типом и уверенностью — ниже bbox если нет места сверху
+      final labelText = '${o.label}  ${(o.confidence * 100).toInt()}%';
+      final labelY = rect.top >= 28 ? rect.top - 26 : rect.bottom + 4;
+      _drawLabel(canvas, labelText, Offset(rect.left, labelY), defColor);
     }
 
     _drawStatusBadge(canvas, 'БРАК', AppPalette.defectRed, const Offset(20, 20));

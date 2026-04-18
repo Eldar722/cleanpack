@@ -21,12 +21,17 @@ class DetectorWeb implements DetectorService {
           .map((e) => e.trim())
           .where((e) => e.isNotEmpty)
           .toList();
-      await web.webLoadModel(AppConstants.modelWebPath);
-      _ready = true;
     } catch (e) {
-      debugPrint('[DetectorWeb] init failed (stub mode): $e');
-      _ready = false;
+      debugPrint('[DetectorWeb] labels load failed: $e');
     }
+    // Always try to load YOLO, but don't block on failure —
+    // JS side has its own contamination detector that works without YOLO.
+    try {
+      await web.webLoadModel(AppConstants.modelWebPath);
+    } catch (e) {
+      debugPrint('[DetectorWeb] YOLO model not loaded (OK, using JS fallback): $e');
+    }
+    _ready = true; // Always ready — JS contamination detector is standalone
   }
 
   @override

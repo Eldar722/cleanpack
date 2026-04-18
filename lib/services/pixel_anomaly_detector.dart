@@ -23,26 +23,23 @@ class PixelAnomalyDetector {
   static const int _gW = 80;
   static const int _gH = 60;
 
-  // A pixel is "dark" if its luma < mean * _darkFactor
-  static const double _darkFactor = 0.62;
+  // Minimum connected cells — 2 = максимальная чувствительность
+  static const int _minCells = 2;
 
-  // Minimum connected dark cells to report as a detection
-  static const int _minCells = 5;
-
-  // Maximum regions to return per frame (avoid UI flooding)
+  // Maximum regions to return per frame
   static const int _maxRegions = 6;
-
-  // Skip detection if mean luma is too low (bad lighting / dark scene)
-  static const int _minMeanLuma = 45;
 
   List<DetectionObject> detect(CameraImage frame) {
     try {
-      if (frame.format.group != ImageFormatGroup.yuv420) return const [];
-      final yPlane = frame.planes[0];
+      final isBgra = frame.format.group == ImageFormatGroup.bgra8888;
+      final isYuv = frame.format.group == ImageFormatGroup.yuv420;
+      if (!isYuv && !isBgra) return const [];
+
       final fw = frame.width;
       final fh = frame.height;
+      final plane = frame.planes[0];
 
-      // Sample luma grid
+      // Sample luma grid — handles both YUV420 (Y-plane) and BGRA (compute luma inline)
       final grid = List.generate(_gH, (_) => List.filled(_gW, 0));
       double sum = 0;
 
@@ -50,22 +47,34 @@ class PixelAnomalyDetector {
         for (int gx = 0; gx < _gW; gx++) {
           final px = (gx * fw / _gW).round().clamp(0, fw - 1);
           final py = (gy * fh / _gH).round().clamp(0, fh - 1);
-          final idx = py * yPlane.bytesPerRow + px;
-          final luma =
-              idx < yPlane.bytes.length ? (yPlane.bytes[idx] & 0xff) : 128;
+          int luma;
+          if (isYuv) {
+            final idx = py * plane.bytesPerRow + px;
+            luma = idx < plane.bytes.length ? (plane.bytes[idx] & 0xff) : 128;
+          } else {
+            // BGRA: 4 bytes per pixel → compute BT.601 luma
+            final idx = (py * plane.bytesPerRow) + px * 4;
+            if (idx + 2 < plane.bytes.length) {
+              final b = plane.bytes[idx] & 0xff;
+              final g = plane.bytes[idx + 1] & 0xff;
+              final r = plane.bytes[idx + 2] & 0xff;
+              luma = (0.299 * r + 0.587 * g + 0.114 * b).round();
+            } else {
+              luma = 128;
+            }
+          }
           grid[gy][gx] = luma;
           sum += luma;
         }
       }
 
       final mean = sum / (_gW * _gH);
-      if (mean < _minMeanLuma) return const []; // too dark / bad lighting
+      // 0.12× = ловит объекты на 12% темнее/светлее фона (максимальная чувствительность)
+      final diffThreshold = mean < 80 ? 12.0 : (mean * 0.12);
 
-      final threshold = (mean * _darkFactor).round();
-
-      // Build dark-cell mask
-      final dark = List.generate(
-          _gH, (y) => List.generate(_gW, (x) => grid[y][x] < threshold));
+      // Build anomaly mask: deviation from the mean
+      final mask = List.generate(
+          _gH, (y) => List.generate(_gW, (x) => (grid[y][x] - mean).abs() > diffThreshold));
 
       // BFS flood fill — iterative to avoid stack overflow on large regions
       final visited =
@@ -74,8 +83,8 @@ class PixelAnomalyDetector {
 
       for (int y = 0; y < _gH && regions.length < _maxRegions; y++) {
         for (int x = 0; x < _gW && regions.length < _maxRegions; x++) {
-          if (!dark[y][x] || visited[y][x]) continue;
-          final region = _bfs(dark, visited, x, y);
+          if (!mask[y][x] || visited[y][x]) continue;
+          final region = _bfs(mask, visited, x, y);
           if (region.cells >= _minCells) regions.add(region);
         }
       }
@@ -137,8 +146,9 @@ class PixelAnomalyDetector {
   ///  - Large area     → dirt patch / sawdust cluster
   ///  - Small compact  → particle / foreign object
   static String _classify(int cells, double aspectRatio) {
+    if (cells <= 5) return 'Микро-дефект (пыль/ворс)';
     if (aspectRatio > 3.5 || aspectRatio < 0.28) return 'Волос/нить';
-    if (cells > 25) return 'Загрязнение';
+    if (cells > 25) return 'Крупное загрязнение';
     if (cells > 10) return 'Опилки/частицы';
     return 'Посторонний объект';
   }
