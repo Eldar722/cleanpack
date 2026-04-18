@@ -24,7 +24,6 @@
 
   <style>
     html, body { margin: 0; padding: 0; background: #050505; font-family: 'JetBrains Mono', monospace; }
-    #cp-video { display: none; }
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
@@ -42,11 +41,11 @@
     // uniform background.
     // ────────────────────────────────────────────────────────
     const DET_W = 160, DET_H = 120, TILE = 8;
+    const detCanvas = document.createElement('canvas');
+    detCanvas.width = DET_W; detCanvas.height = DET_H;
 
     function detectContamination(videoEl) {
-      const c = document.createElement('canvas');
-      c.width = DET_W; c.height = DET_H;
-      const ctx = c.getContext('2d');
+      const ctx = detCanvas.getContext('2d');
       ctx.drawImage(videoEl, 0, 0, DET_W, DET_H);
       const data = ctx.getImageData(0, 0, DET_W, DET_H).data;
 
@@ -167,8 +166,10 @@
     // MAIN DETECTION ENTRY POINT (called from Dart every 200ms)
     // ────────────────────────────────────────────────────────
     window.detectOnVideo = async function() {
-      if (!cpVideo) {
-        cpVideo = document.querySelector('video');
+      if (!cpVideo || !cpVideo.srcObject) {
+        // Find the live camera feed (has srcObject from getUserMedia)
+        cpVideo = Array.from(document.querySelectorAll('video'))
+          .find(v => v.srcObject != null) || null;
         if (!cpVideo) return '[]';
       }
       if (cpVideo.readyState < 2) return '[]';
@@ -195,7 +196,7 @@
     };
 
     function parseYolo(data, cw, ch) {
-      const numBoxes = 8400, numClasses = 80, threshold = 0.25;
+      const numBoxes = 8400, numClasses = 80, threshold = 0.10;
       const objects = [];
       for (let i = 0; i < numBoxes; i++) {
         let maxScore = 0, maxClass = 0;
@@ -224,7 +225,6 @@
   </script>
 </head>
 <body>
-  <video id="cp-video" autoplay playsinline muted></video>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

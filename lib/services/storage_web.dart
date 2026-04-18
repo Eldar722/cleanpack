@@ -69,7 +69,8 @@ class StorageWeb implements StorageService {
     await _p.remove(_logsKey);
   }
 
-  static String _q(String s) => '"${s.replaceAll('"', '""')}"';
+  static String _q(String s) =>
+      '"${s.replaceAll('"', '""').replaceAll('\n', ' ').replaceAll('\r', ' ')}"';
 
   @override
   Future<String> exportCsv() async {

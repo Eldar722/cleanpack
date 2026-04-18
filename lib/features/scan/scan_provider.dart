@@ -125,7 +125,7 @@ class ScanController extends StateNotifier<ScanState> {
       try {
         final refs = await store.getReferences();
         if (refs.isNotEmpty && refs.first.bytes.isNotEmpty) {
-          final decoded = _ssimSvc.decodePng(refs.first.bytes);
+          final decoded = _ssimSvc.decodeAny(refs.first.bytes);
           _referenceFrame = decoded;
           _refComparator.loadFromImage(decoded);
           _hasCustomReference = true;
@@ -171,7 +171,7 @@ class ScanController extends StateNotifier<ScanState> {
       final store = ref.read(storageServiceProvider);
       final refs = await store.getReferences();
       if (refs.isNotEmpty && refs.first.bytes.isNotEmpty) {
-        final decoded = _ssimSvc.decodePng(refs.first.bytes);
+        final decoded = _ssimSvc.decodeAny(refs.first.bytes);
         _referenceFrame = decoded;
         _refComparator.loadFromImage(decoded);
         _hasCustomReference = true;
@@ -185,6 +185,9 @@ class ScanController extends StateNotifier<ScanState> {
   void pauseResume() {
     state = state.copyWith(paused: !state.paused);
   }
+
+  void pause() => state = state.copyWith(paused: true);
+  void resume() => state = state.copyWith(paused: false);
 
   void _startFpsTimer() {
     _fpsTimer?.cancel();
@@ -362,27 +365,48 @@ class ScanController extends StateNotifier<ScanState> {
   //  HELPERS
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  /// Map COCO class names to defect categories
+  static const _animalLabels = {
+    'cat', 'dog', 'horse', 'sheep', 'cow', 'bear',
+    'elephant', 'zebra', 'giraffe', 'bird',
+  };
+  static const _foodLabels = {
+    'banana', 'apple', 'orange', 'broccoli', 'carrot',
+    'hot dog', 'pizza', 'donut', 'cake', 'sandwich',
+  };
+  static const _containerLabels = {
+    'bottle', 'cup', 'bowl', 'wine glass', 'vase',
+  };
+  static const _toolLabels = {
+    'knife', 'fork', 'spoon', 'scissors', 'toothbrush',
+  };
+
+  /// Maps raw COCO label (English) or synthetic label (obj81/obj82)
+  /// to a Russian defect description. Single mapping point for all detectors.
   List<DetectionObject> _mapCocoClasses(List<DetectionObject> raw) {
     final mapped = <DetectionObject>[];
     for (final obj in raw) {
       if (obj.confidence < AppConstants.confidenceThreshold) continue;
-      final l = obj.label.toLowerCase();
-      String newLabel;
+      final l = obj.label.toLowerCase().trim();
+      final String newLabel;
 
-      if (l.contains('person') || l.contains('hand')) {
-        newLabel = 'Посторонний объект (человек)';
-      } else if (l.contains('scissors') || l.contains('knife')) {
-        newLabel = 'Опасный инструмент';
-      } else if (l.contains('bottle') || l.contains('cup')) {
-        newLabel = 'Загрязнение (тара)';
-      } else if (l.contains('cell phone') || l.contains('remote')) {
-        newLabel = 'Электроника (мусор)';
-      } else if (obj.label == 'obj81') {
+      if (l == 'obj81') {
         newLabel = 'Загрязнение (пиксели)';
-      } else if (obj.label == 'obj82') {
-        // Self-referencing local contrast detector (JS)
+      } else if (l == 'obj82') {
         newLabel = 'Загрязнение / пыль обнаружена';
+      } else if (l == 'person' || l.contains('hand')) {
+        newLabel = 'Посторонний объект (человек)';
+      } else if (_animalLabels.contains(l)) {
+        newLabel = 'Волос/шерсть животного';
+      } else if (_foodLabels.contains(l)) {
+        newLabel = 'Загрязнение (органика)';
+      } else if (l.contains('scissors') || l == 'knife') {
+        newLabel = 'Опасный инструмент';
+      } else if (_containerLabels.contains(l)) {
+        newLabel = 'Загрязнение (тара)';
+      } else if (_toolLabels.contains(l)) {
+        newLabel = 'Посторонний объект';
+      } else if (l == 'cell phone' || l == 'remote') {
+        newLabel = 'Электроника (мусор)';
       } else {
         newLabel = 'Инородный предмет (${obj.label})';
       }

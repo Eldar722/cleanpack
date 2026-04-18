@@ -63,4 +63,10 @@ class SsimService {
   img.Image decodePng(List<int> bytes) {
     return img.decodePng(Uint8List.fromList(bytes)) ?? img.Image(width: 1, height: 1);
   }
+
+  /// Decodes any supported image format (JPEG, PNG, BMP, etc.).
+  /// Use this for images captured from the camera (JPEG).
+  img.Image decodeAny(List<int> bytes) {
+    return img.decodeImage(Uint8List.fromList(bytes)) ?? img.Image(width: 1, height: 1);
+  }
 }

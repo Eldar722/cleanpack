@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -8,6 +9,7 @@ import 'storage_service.dart';
 
 class StorageMobile implements StorageService {
   Database? _db;
+  Completer<void>? _initCompleter;
 
   @override
   Future<void> initialize() async {
@@ -58,11 +60,18 @@ class StorageMobile implements StorageService {
     );
   }
 
-  // Lazy-init guard: if other providers call storage before ScanController.initialize()
-  // completes, we auto-initialize instead of crashing with _db! null dereference.
   Future<void> _ensureInitialized() async {
     if (_db != null) return;
-    await initialize();
+    if (_initCompleter != null) return _initCompleter!.future;
+    _initCompleter = Completer<void>();
+    try {
+      await initialize();
+      _initCompleter!.complete();
+    } catch (e) {
+      _initCompleter!.completeError(e);
+      _initCompleter = null;
+      rethrow;
+    }
   }
 
   Database get _d => _db!;
@@ -122,7 +131,8 @@ class StorageMobile implements StorageService {
     await _d.delete('logs');
   }
 
-  static String _q(String s) => '"${s.replaceAll('"', '""')}"';
+  static String _q(String s) =>
+      '"${s.replaceAll('"', '""').replaceAll('\n', ' ').replaceAll('\r', ' ')}"';
 
   @override
   Future<String> exportCsv() async {

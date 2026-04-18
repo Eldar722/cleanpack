@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'core/constants.dart';
 import 'core/theme.dart';
 import 'features/logs/log_screen.dart';
 import 'features/reference/reference_screen.dart';
+import 'features/scan/scan_provider.dart';
 import 'features/scan/scan_screen.dart';
 import 'features/stats/stats_screen.dart';
 
@@ -55,7 +57,7 @@ class _TazalensAppState extends State<TazalensApp> {
   }
 }
 
-class _Shell extends StatelessWidget {
+class _Shell extends ConsumerWidget {
   final Widget child;
   final String location;
   const _Shell({required this.child, required this.location});
@@ -68,11 +70,17 @@ class _Shell extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       body: child,
       bottomNavigationBar: _NavBar(index: _idx, onTap: (i) {
         const paths = ['/', '/ref', '/logs', '/stats'];
+        final notifier = ref.read(scanControllerProvider.notifier);
+        if (_idx == 0 && i != 0) {
+          notifier.pause();
+        } else if (_idx != 0 && i == 0) {
+          notifier.resume();
+        }
         context.go(paths[i]);
       }),
     );

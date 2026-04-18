@@ -7,6 +7,7 @@ class CameraService {
   CameraController? _controller;
   List<CameraDescription> _cameras = const [];
   bool _initialized = false;
+  void Function(CameraImage)? _streamCallback;
 
   CameraController? get controller => _controller;
   bool get isInitialized => _initialized;
@@ -56,6 +57,7 @@ class CameraService {
 
   Future<void> startStream(void Function(CameraImage) onFrame) async {
     if (_controller == null || kIsWeb) return;
+    _streamCallback = onFrame;
     if (_controller!.value.isStreamingImages) return;
     await _controller!.startImageStream(onFrame);
   }
@@ -70,7 +72,13 @@ class CameraService {
   Future<XFile?> takePicture() async {
     if (_controller == null) return null;
     try {
-      return await _controller!.takePicture();
+      final wasStreaming = _controller!.value.isStreamingImages;
+      if (wasStreaming) await _controller!.stopImageStream();
+      final file = await _controller!.takePicture();
+      if (wasStreaming && _streamCallback != null) {
+        await _controller!.startImageStream(_streamCallback!);
+      }
+      return file;
     } catch (_) {
       return null;
     }

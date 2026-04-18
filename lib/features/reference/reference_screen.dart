@@ -9,9 +9,7 @@ import '../../models/reference_image.dart';
 import '../scan/scan_provider.dart';
 
 final referencesProvider =
-    FutureProvider<List<ReferenceImage>>((ref) async {
-  // Refresh when a new reference is added
-  ref.watch(logUpdateCounterProvider);
+    FutureProvider.autoDispose<List<ReferenceImage>>((ref) async {
   return ref.read(storageServiceProvider).getReferences();
 });
 
@@ -21,6 +19,7 @@ class ReferenceScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final refs = ref.watch(referencesProvider);
+    final scanState = ref.watch(scanControllerProvider);
     final cam = ref.read(cameraServiceProvider);
 
     return Scaffold(
@@ -58,7 +57,7 @@ class ReferenceScreen extends ConsumerWidget {
               }
             },
           ),
-          if (cam.isInitialized) ...[
+          if (scanState.ready && cam.isInitialized) ...[
             const SizedBox(height: 12),
             FloatingActionButton.extended(
               heroTag: 'camera_ref',
@@ -77,15 +76,27 @@ class ReferenceScreen extends ConsumerWidget {
                   }
                   return;
                 }
-                final bytes = await file.readAsBytes();
+                final rawBytes = await file.readAsBytes();
+                final decoded = img.decodeImage(rawBytes);
+                if (decoded == null) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Не удалось декодировать фото')),
+                    );
+                  }
+                  return;
+                }
+                const refW = 320, refH = 240;
+                final resized = img.copyResize(decoded, width: refW, height: refH);
+                final pngBytes = img.encodePng(resized);
                 await ref.read(storageServiceProvider).saveReference(
                   ReferenceImage(
                     id: const Uuid().v4(),
                     name: 'Эталон ${DateFormat('HH:mm:ss').format(DateTime.now())}',
                     createdAt: DateTime.now(),
-                    bytes: bytes,
-                    width: 0,
-                    height: 0,
+                    bytes: pngBytes,
+                    width: refW,
+                    height: refH,
                   ),
                 );
                 await ref.read(scanControllerProvider.notifier).reloadReference();

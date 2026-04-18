@@ -2,20 +2,29 @@ import 'package:flutter/material.dart';
 import '../../core/constants.dart';
 import '../../models/detection_result.dart';
 
-// Цвет и иконка для каждого типа дефекта
+// Цвет по типу реального дефекта (метки из детекторов)
 Color _defectColor(String label) {
   final l = label.toLowerCase();
-  if (l.contains('дырк') || l.contains('hole')) return const Color(0xFFFF6B35);
-  if (l.contains('грязь') || l.contains('dirt')) return const Color(0xFFFFB800);
-  if (l.contains('разрыв') || l.contains('tear')) return const Color(0xFFFF3355);
+  if (l.contains('волос') || l.contains('нить') || l.contains('шерст')) {
+    return const Color(0xFFFFB800);
+  }
+  if (l.contains('загрязн') || l.contains('пыль') || l.contains('пятно') ||
+      l.contains('органик') || l.contains('тара')) {
+    return const Color(0xFFFF9500);
+  }
+  if (l.contains('опасн') || l.contains('инструмент')) {
+    return const Color(0xFFFF6B35);
+  }
+  if (l.contains('электрон')) return const Color(0xFF9B59B6);
   return const Color(0xFFFF3355);
 }
 
 String _defectIcon(String label) {
   final l = label.toLowerCase();
-  if (l.contains('дырк') || l.contains('hole')) return '○';
-  if (l.contains('грязь') || l.contains('dirt')) return '✦';
-  if (l.contains('разрыв') || l.contains('tear')) return '╱';
+  if (l.contains('волос') || l.contains('нить')) return '╱';
+  if (l.contains('загрязн') || l.contains('пыль') || l.contains('пятно')) return '✦';
+  if (l.contains('опасн')) return '⚡';
+  if (l.contains('электрон')) return '▣';
   return '!';
 }
 

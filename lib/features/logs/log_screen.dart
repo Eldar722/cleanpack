@@ -85,7 +85,7 @@ class LogScreen extends ConsumerWidget {
                           fontSize: 18)),
                   const SizedBox(height: 6),
                   const Text(
-                    'Нажмите «БРАК (демо)» на экране\nСканера чтобы добавить записи',
+                    'Наведите камеру на упаковку —\nдефекты логируются автоматически',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: AppPalette.slate),
                   ),

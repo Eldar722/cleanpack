@@ -154,7 +154,7 @@ class StatsScreen extends ConsumerWidget {
                             style: TextStyle(color: AppPalette.slate)),
                         const SizedBox(height: 6),
                         const Text(
-                          'Нажмите «БРАК (демо)» на Сканере\nдля добавления тестовых данных',
+                          'Наведите камеру на упаковку —\nданные появятся автоматически',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                               color: AppPalette.subtext, fontSize: 12),
@@ -201,7 +201,7 @@ class StatsScreen extends ConsumerWidget {
                       );
                       if (confirm == true) {
                         await ref.read(storageServiceProvider).resetShift();
-                        ref.invalidate(statsProvider);
+                        ref.read(logUpdateCounterProvider.notifier).state++;
                       }
                     },
                   ),
@@ -253,7 +253,7 @@ class StatsScreen extends ConsumerWidget {
       child: Row(
         children: [
           Expanded(
-            flex: (okFrac * 1000).round().clamp(0, 1000),
+            flex: (okFrac * 1000).round().clamp(1, 999),
             child: Container(
               decoration: BoxDecoration(
                 color: AppPalette.okGreen,
@@ -262,7 +262,7 @@ class StatsScreen extends ConsumerWidget {
             ),
           ),
           Expanded(
-            flex: ((1 - okFrac) * 1000).round().clamp(0, 1000),
+            flex: ((1 - okFrac) * 1000).round().clamp(1, 999),
             child: Container(
               decoration: BoxDecoration(
                 color: AppPalette.defectRed,
