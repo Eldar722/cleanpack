@@ -46,6 +46,7 @@ class ReferenceScreen extends ConsumerWidget {
                 style: TextStyle(color: Colors.white)),
             onPressed: () async {
               await _saveDemoReference(ref);
+              await ref.read(scanControllerProvider.notifier).reloadReference();
               ref.invalidate(referencesProvider);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -87,6 +88,7 @@ class ReferenceScreen extends ConsumerWidget {
                     height: 0,
                   ),
                 );
+                await ref.read(scanControllerProvider.notifier).reloadReference();
                 ref.invalidate(referencesProvider);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(

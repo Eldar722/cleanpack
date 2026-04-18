@@ -7,15 +7,26 @@ import 'features/reference/reference_screen.dart';
 import 'features/scan/scan_screen.dart';
 import 'features/stats/stats_screen.dart';
 
-class CleanPackApp extends StatelessWidget {
-  const CleanPackApp({super.key});
+class TazalensApp extends StatefulWidget {
+  const TazalensApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final router = GoRouter(
+  State<TazalensApp> createState() => _TazalensAppState();
+}
+
+class _TazalensAppState extends State<TazalensApp> {
+  // Router must be created once and held in state, not in build().
+  // Creating inside build() causes navigation state to reset on every rebuild.
+  late final GoRouter _router;
+
+  @override
+  void initState() {
+    super.initState();
+    _router = GoRouter(
       routes: [
         ShellRoute(
-          builder: (ctx, state, child) => _Shell(location: state.uri.path, child: child),
+          builder: (ctx, state, child) =>
+              _Shell(location: state.uri.path, child: child),
           routes: [
             GoRoute(path: '/', builder: (_, __) => const ScanScreen()),
             GoRoute(path: '/ref', builder: (_, __) => const ReferenceScreen()),
@@ -25,12 +36,21 @@ class CleanPackApp extends StatelessWidget {
         ),
       ],
     );
+  }
 
+  @override
+  void dispose() {
+    _router.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'CleanPack AR',
+      title: 'TaZaLens',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.build(),
-      routerConfig: router,
+      routerConfig: _router,
     );
   }
 }

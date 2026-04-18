@@ -1,4 +1,4 @@
-package com.cleanpack.cleanpack_ar
+package com.tazalens.tazalens
 
 import io.flutter.embedding.android.FlutterActivity
 

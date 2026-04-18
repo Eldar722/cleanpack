@@ -12,7 +12,7 @@ class StorageMobile implements StorageService {
   @override
   Future<void> initialize() async {
     final dir = await getApplicationDocumentsDirectory();
-    final path = p.join(dir.path, 'cleanpack.db');
+    final path = p.join(dir.path, 'tazalens.db');
     _db = await openDatabase(
       path,
       version: 2,
@@ -58,10 +58,18 @@ class StorageMobile implements StorageService {
     );
   }
 
+  // Lazy-init guard: if other providers call storage before ScanController.initialize()
+  // completes, we auto-initialize instead of crashing with _db! null dereference.
+  Future<void> _ensureInitialized() async {
+    if (_db != null) return;
+    await initialize();
+  }
+
   Database get _d => _db!;
 
   @override
   Future<void> saveLog(InspectionLog log) async {
+    await _ensureInitialized();
     await _d.insert('logs', {
       'id': log.id,
       'position_id': log.positionId,
@@ -75,6 +83,7 @@ class StorageMobile implements StorageService {
 
   @override
   Future<List<InspectionLog>> getLogs({int limit = 200}) async {
+    await _ensureInitialized();
     final rows = await _d.query('logs', orderBy: 'ts DESC', limit: limit);
     return rows
         .map((r) => InspectionLog(
@@ -91,6 +100,7 @@ class StorageMobile implements StorageService {
 
   @override
   Future<Map<String, dynamic>> getStats() async {
+    await _ensureInitialized();
     final total = Sqflite.firstIntValue(
             await _d.rawQuery('SELECT COUNT(*) FROM logs')) ??
         0;
@@ -108,8 +118,11 @@ class StorageMobile implements StorageService {
 
   @override
   Future<void> resetShift() async {
+    await _ensureInitialized();
     await _d.delete('logs');
   }
+
+  static String _q(String s) => '"${s.replaceAll('"', '""')}"';
 
   @override
   Future<String> exportCsv() async {
@@ -117,13 +130,14 @@ class StorageMobile implements StorageService {
     final buf = StringBuffer('id,position_id,timestamp,result,defect_type,confidence,ssim\n');
     for (final l in logs) {
       buf.writeln(
-          '${l.id},${l.positionId},${l.timestamp.toIso8601String()},${l.result},${l.defectType},${l.confidence.toStringAsFixed(3)},${l.ssimScore?.toStringAsFixed(3) ?? ''}');
+          '${_q(l.id)},${_q(l.positionId)},${l.timestamp.toIso8601String()},${l.result},${_q(l.defectType)},${l.confidence.toStringAsFixed(3)},${l.ssimScore?.toStringAsFixed(3) ?? ''}');
     }
     return buf.toString();
   }
 
   @override
   Future<void> saveReference(ReferenceImage ref) async {
+    await _ensureInitialized();
     await _d.insert('refs', {
       'id': ref.id,
       'name': ref.name,
@@ -136,6 +150,7 @@ class StorageMobile implements StorageService {
 
   @override
   Future<List<ReferenceImage>> getReferences() async {
+    await _ensureInitialized();
     final rows = await _d.query('refs', orderBy: 'created_at DESC');
     return rows
         .map((r) => ReferenceImage(
@@ -151,6 +166,7 @@ class StorageMobile implements StorageService {
 
   @override
   Future<void> deleteReference(String id) async {
+    await _ensureInitialized();
     await _d.delete('refs', where: 'id = ?', whereArgs: [id]);
   }
 }

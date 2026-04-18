@@ -118,7 +118,8 @@ class LogScreen extends ConsumerWidget {
   Future<void> _export(BuildContext ctx, WidgetRef ref) async {
     try {
       final csv = await ref.read(storageServiceProvider).exportCsv();
-      if (csv.trim().isEmpty || csv == 'id,timestamp,result,defect_type,confidence,ssim\n') {
+      const _header = 'id,position_id,timestamp,result,defect_type,confidence,ssim';
+      if (csv.trim().isEmpty || csv.trim() == _header) {
         if (ctx.mounted) {
           ScaffoldMessenger.of(ctx).showSnackBar(
             const SnackBar(content: Text('Нет данных для экспорта')),
@@ -127,12 +128,12 @@ class LogScreen extends ConsumerWidget {
         return;
       }
       if (PlatformUtils.isWeb) {
-        exp.downloadCsv(csv, 'cleanpack_log.csv');
+        exp.downloadCsv(csv, 'tazalens_log.csv');
       } else {
         final dir = await getTemporaryDirectory();
-        final f = File('${dir.path}/cleanpack_log.csv');
+        final f = File('${dir.path}/tazalens_log.csv');
         await f.writeAsBytes(utf8.encode(csv));
-        await Share.shareXFiles([XFile(f.path)], text: 'CleanPack AR — журнал');
+        await Share.shareXFiles([XFile(f.path)], text: 'TaZaLens — журнал');
       }
       if (ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(

@@ -45,7 +45,9 @@ class CameraService {
       } else {
         await _controller!.initialize();
       }
-      _initialized = _controller != null;
+      // Check that controller actually initialized successfully.
+      // Do NOT use `_controller != null` — controller object exists even when init failed.
+      _initialized = _controller?.value.isInitialized ?? false;
     } catch (e) {
       debugPrint('[CameraService] init failed: $e');
       _initialized = false;

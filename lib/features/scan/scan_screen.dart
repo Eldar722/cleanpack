@@ -72,7 +72,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
     return Scaffold(
       backgroundColor: AppPalette.bg,
       appBar: AppBar(
-        title: const Text('CleanPack AR'),
+        title: const Text('TaZaLens'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
@@ -230,9 +230,12 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
       ),
     );
 
-    // Сброс к следующей позиции
+    // After БРАК: keep red frame visible so jury sees the detection.
+    // After ГОДНО: explicitly reset AR to green state.
     setState(() => _selectedDefect = null);
-    ref.read(scanControllerProvider.notifier).simulateOk();
+    if (!isDefect) {
+      ref.read(scanControllerProvider.notifier).simulateOk();
+    }
   }
 
   Widget _pill(String text, Color color) {
@@ -488,81 +491,3 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-class _StatusBanner extends StatelessWidget {
-  final dynamic state;
-  const _StatusBanner({required this.state});
-
-  @override
-  Widget build(BuildContext context) {
-    final detection = state.detection;
-    final isDefect = detection.isDefect as bool;
-    final color = isDefect ? AppPalette.defectRed : AppPalette.okGreen;
-    final label = isDefect ? 'БРАК' : 'ГОДНО';
-    final sub = isDefect
-        ? '${detection.defectType} • ${(detection.topConfidence * 100).toInt()}%'
-        : detection.ssimScore != null
-            ? 'SSIM ${detection.ssimScore!.toStringAsFixed(2)}'
-            : 'Эталон соответствует норме';
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOutCubic,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.4)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
-              shape: BoxShape.circle,
-              border: Border.all(color: color, width: 2),
-            ),
-            child: Icon(
-              isDefect ? Icons.warning_amber_rounded : Icons.check_rounded,
-              color: color,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(label,
-                    style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 22)),
-                const SizedBox(height: 2),
-                Text(sub,
-                    style:
-                        const TextStyle(color: AppPalette.slate, fontSize: 13)),
-              ],
-            ),
-          ),
-          if (state.paused == true)
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppPalette.surface2,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppPalette.borderSoft),
-              ),
-              child: const Text('ПАУЗА',
-                  style: TextStyle(
-                      color: AppPalette.slate,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12)),
-            ),
-        ],
-      ),
-    );
-  }
-}

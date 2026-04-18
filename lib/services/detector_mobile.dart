@@ -133,6 +133,44 @@ class DetectorMobile implements DetectorService {
     return tensor;
   }
 
+  // Maps COCO class names to contamination labels relevant for polyester fiber.
+  // Any class detected by YOLOv8 means a foreign object is present in the fiber.
+  static const Map<String, String> _cocoToContamination = {
+    // Hair / thread-like
+    'cat': 'Волос/шерсть животного',
+    'dog': 'Волос/шерсть животного',
+    'horse': 'Волос/шерсть животного',
+    'sheep': 'Волос/шерсть животного',
+    'cow': 'Волос/шерсть животного',
+    'bear': 'Волос/шерсть животного',
+    'person': 'Волос/нить (человек)',
+    // Food contamination
+    'banana': 'Загрязнение (органика)',
+    'apple': 'Загрязнение (органика)',
+    'orange': 'Загрязнение (органика)',
+    'broccoli': 'Загрязнение (органика)',
+    'carrot': 'Загрязнение (органика)',
+    'hot dog': 'Загрязнение (органика)',
+    'pizza': 'Загрязнение (органика)',
+    'donut': 'Загрязнение (органика)',
+    'cake': 'Загрязнение (органика)',
+    'sandwich': 'Загрязнение (органика)',
+    // Hard particles / debris
+    'bottle': 'Посторонний объект',
+    'cup': 'Посторонний объект',
+    'bowl': 'Посторонний объект',
+    'knife': 'Посторонний объект',
+    'fork': 'Посторонний объект',
+    'spoon': 'Посторонний объект',
+    'scissors': 'Посторонний объект',
+    'toothbrush': 'Посторонний объект',
+    'pen': 'Посторонний объект',
+    'cell phone': 'Посторонний объект',
+  };
+
+  static String _mapCocoLabel(String raw) =>
+      _cocoToContamination[raw.toLowerCase()] ?? 'Загрязнение';
+
   List<DetectionObject> _parseYolov8(List<List<double>> output) {
     // output shape: [84, 8400] — 4 bbox + 80 class scores
     const numBoxes = 8400;
@@ -154,9 +192,9 @@ class DetectorMobile implements DetectorService {
       final w = output[2][i] / AppConstants.inputSize;
       final h = output[3][i] / AppConstants.inputSize;
       final rect = Rect.fromLTWH(cx - w / 2, cy - h / 2, w, h);
-      final label = bestC < _labels.length ? _labels[bestC] : 'obj$bestC';
+      final rawLabel = bestC < _labels.length ? _labels[bestC] : 'obj$bestC';
       results.add(DetectionObject(
-        label: label,
+        label: _mapCocoLabel(rawLabel),
         confidence: best,
         bbox: rect,
       ));

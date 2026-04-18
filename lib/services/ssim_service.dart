@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 
 class SsimResult {
@@ -44,8 +45,9 @@ class SsimService {
     varB /= n;
     cov /= n;
 
-    const c1 = 6.5025; // (0.01*255)^2
-    const c2 = 58.5225; // (0.03*255)^2
+    // luminance from package:image is in [0.0, 1.0], so K1=0.01, K2=0.03
+    const c1 = 0.0001; // (0.01)^2
+    const c2 = 0.0009; // (0.03)^2
     final num = (2 * muA * muB + c1) * (2 * cov + c2);
     final den = (muA * muA + muB * muB + c1) * (varA + varB + c2);
     if (den == 0) return 1.0;
@@ -59,6 +61,6 @@ class SsimService {
   }
 
   img.Image decodePng(List<int> bytes) {
-    return img.decodePng(bytes as dynamic) ?? img.Image(width: 1, height: 1);
+    return img.decodePng(Uint8List.fromList(bytes)) ?? img.Image(width: 1, height: 1);
   }
 }

@@ -1,6 +1,6 @@
 {
-    "name": "CleanPack AR",
-    "short_name": "CleanPack",
+    "name": "TaZaLens",
+    "short_name": "TaZaLens",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#f3e8ee",

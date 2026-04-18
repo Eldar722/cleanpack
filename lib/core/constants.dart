@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppConstants {
-  static const double confidenceThreshold = 0.4;
+  static const double confidenceThreshold = 0.25;
   static const double iouThreshold = 0.45;
   static const int inputSize = 640;
   static const double ssimThreshold = 0.85;
